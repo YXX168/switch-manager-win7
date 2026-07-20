@@ -1,0 +1,11 @@
+data/
+*.exe
+*.zip
+*.log
+*.cfg
+*.bak
+*.tmp
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store

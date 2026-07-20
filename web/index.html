@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>交换机管理系统</title>
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/extras.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v10H4zM7 10h2m2 0h2m2 0h2M7 14h10"/></svg></span><div><strong>交换机管理</strong><small>NETWORK CONSOLE</small></div></div>
+    <div class="nav-label">工作台</div>
+    <nav>
+      <button class="nav active" data-page="dashboard"><span class="nav-glyph">⌂</span><span>运行概览</span></button>
+      <button class="nav" data-page="devices"><span class="nav-glyph">▦</span><span>设备管理</span></button>
+      <button class="nav" data-page="backups"><span class="nav-glyph">↻</span><span>配置备份</span></button>
+      <button class="nav" data-page="audit"><span class="nav-glyph">≡</span><span>操作日志</span></button>
+    </nav>
+    <div class="local-note"><i></i><div><b>仅本机访问</b><small>数据保存在程序目录</small></div></div>
+  </aside>
+  <main>
+    <header><div><div class="eyebrow">NETWORK OPERATIONS</div><h1 id="page-title">运行概览</h1><p id="page-subtitle">掌握设备与服务状态</p></div><div class="header-actions"><button class="safe-pill" id="admin-toggle">◆ 只读安全模式</button><span class="server-pill"><i></i>本地服务正常</span><button class="primary" id="header-add"><span class="plus">＋</span> 添加设备</button></div></header>
+
+    <section class="page active" id="page-dashboard">
+      <div class="cards">
+        <article class="metric metric-blue"><div class="metric-icon blue">▦</div><div><span>设备总数</span><strong id="m-total">0</strong><small>已纳管设备</small></div></article>
+        <article class="metric metric-red"><div class="metric-icon red">H</div><div><span>华为设备</span><strong id="m-huawei">0</strong><small>Huawei VRP</small></div></article>
+        <article class="metric metric-cyan"><div class="metric-icon cyan">3</div><div><span>华三设备</span><strong id="m-h3c">0</strong><small>H3C Comware</small></div></article>
+        <article class="metric metric-green"><div class="metric-icon green">◉</div><div><span>SNMP 已启用</span><strong id="m-snmp">0</strong><small>监控采集就绪</small></div></article>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div><h2>设备运行视图 <span class="count-badge" id="dashboard-count">0 台</span></h2><p>快速查看和检测已录入设备</p></div><button class="text-btn" data-goto="devices">进入设备管理 <span>→</span></button></div>
+        <div id="dashboard-devices"></div>
+      </div>
+    </section>
+
+    <section class="page" id="page-devices">
+      <div class="toolbar"><div class="search">⌕ <input id="search" placeholder="搜索名称、IP、位置或型号"></div><select id="vendor-filter"><option value="">全部厂商</option><option>Huawei</option><option>H3C</option></select><button class="secondary" id="scan-all">巡检全部</button><button class="primary" id="batch-command">批量查询</button></div>
+      <div class="panel"><div id="device-table"></div></div>
+    </section>
+
+    <section class="page" id="page-backups">
+      <div class="panel">
+        <div class="panel-head"><div><h2>配置备份</h2><p>通过 SSH 获取 display current-configuration</p></div><div><button class="secondary" id="compare-backups">对比所选</button> <button class="secondary" id="refresh-backups">刷新</button> <button class="primary" id="backup-all">备份全部</button></div></div>
+        <div id="backup-table"></div>
+      </div>
+    </section>
+
+    <section class="page" id="page-audit">
+      <div class="panel"><div class="panel-head"><div><h2>操作日志</h2><p>保留最近的检测、命令和备份记录</p></div><button class="secondary" id="refresh-audit">刷新</button></div><div id="audit-table"></div></div>
+    </section>
+  </main>
+
+  <div class="modal" id="device-modal" aria-hidden="true"><div class="dialog">
+    <div class="dialog-head"><div><h2 id="form-title">添加设备</h2><p>录入交换机连接信息</p></div><button class="close" data-close>×</button></div>
+    <form id="device-form">
+      <input type="hidden" id="f-id">
+      <div class="form-grid">
+        <label><span>设备名称 *</span><input id="f-name" required placeholder="例如：核心交换机-01"></label>
+        <label><span>管理地址 *</span><input id="f-host" required placeholder="192.168.1.1"></label>
+        <label><span>厂商 *</span><select id="f-vendor"><option value="Huawei">华为 Huawei</option><option value="H3C">华三 H3C</option></select></label>
+        <label><span>型号</span><input id="f-model" placeholder="例如：S5735-L24T4X-A1"></label>
+        <label><span>位置</span><input id="f-location" placeholder="例如：A栋 3F 机房"></label>
+        <label><span>SSH 端口 *</span><input id="f-port" type="number" value="22" min="1" max="65535"></label>
+        <label><span>SSH 用户名 *</span><input id="f-user" required autocomplete="off"></label>
+        <label><span>SSH 密码 <em id="password-hint">*</em></span><input id="f-password" type="password" autocomplete="new-password"></label>
+      </div>
+      <label class="check"><input id="f-snmp" type="checkbox" checked><span>启用 SNMP v2c 信息读取</span></label>
+      <div class="form-grid snmp-fields">
+        <label><span>SNMP 端口</span><input id="f-snmp-port" type="number" value="161" min="1" max="65535"></label>
+        <label><span>SNMP 团体字 <em id="community-hint">*</em></span><input id="f-community" type="password" autocomplete="new-password"></label>
+      </div>
+      <div class="notice">密码和 SNMP 团体字由 Windows 当前用户加密保存，不会返回到浏览器。</div>
+      <div class="actions"><button type="button" class="secondary" data-close>取消</button><button type="submit" class="primary" id="save-device">保存设备</button></div>
+    </form>
+  </div></div>
+
+  <div class="modal" id="command-modal" aria-hidden="true"><div class="dialog command-dialog">
+    <div class="dialog-head"><div><h2 id="command-title">执行只读查询</h2><p>通过 SSH 查询设备信息，不允许修改配置</p></div><button class="close" data-close>×</button></div>
+    <form id="command-form"><input type="hidden" id="command-id"><label><span>快捷查询</span><select id="command-preset"><option value="">选择常用查询…</option><option value="display version">系统版本</option><option value="display interface brief">接口状态摘要</option><option value="display interface counters errors">接口错误计数</option><option value="display vlan">VLAN 信息</option><option value="display mac-address">MAC 地址表</option><option value="display arp">ARP 表</option><option value="display ip routing-table">路由表</option><option value="display lldp neighbor brief">LLDP 邻居</option><option value="display cpu-usage">CPU 使用率</option><option value="display memory-usage">内存使用率</option><option value="display device">设备部件状态</option><option value="display transceiver interface">光模块信息</option><option value="display logbuffer">日志缓冲区</option><option value="display clock">设备时间</option></select></label><label><span>只读查询命令</span><textarea id="command-input" rows="3" placeholder="display interface brief" required></textarea></label><div class="safety-notice"><b>只读保护已开启</b><span>只允许 display 查询。配置、保存、重启、清除等命令会被后端拒绝。</span></div><div class="actions"><button type="button" class="secondary" data-close>取消</button><button class="primary">执行查询</button></div></form>
+    <pre id="command-output" class="terminal hidden"></pre>
+  </div></div>
+
+  <div class="modal" id="viewer-modal" aria-hidden="true"><div class="dialog viewer-dialog"><div class="dialog-head"><div><h2 id="viewer-title">配置内容</h2><p>只读查看，可使用 Ctrl+F 搜索</p></div><button class="close" data-close>×</button></div><pre id="viewer-content" class="terminal viewer"></pre></div></div>
+
+  <div class="modal" id="compare-modal" aria-hidden="true"><div class="dialog compare-dialog"><div class="dialog-head"><div><h2>配置并排对比</h2><p>左右滚动并检查两份配置差异</p></div><button class="close" data-close>×</button></div><div class="compare-grid"><section><h3 id="compare-left-title"></h3><pre id="compare-left" class="terminal"></pre></section><section><h3 id="compare-right-title"></h3><pre id="compare-right" class="terminal"></pre></section></div></div></div>
+
+  <div class="modal" id="admin-modal" aria-hidden="true"><div class="dialog admin-dialog">
+    <div class="dialog-head"><div><h2 id="admin-title">解锁管理员权限</h2><p id="admin-subtitle">管理员会话默认保持 15 分钟</p></div><button class="close" data-close>×</button></div>
+    <form id="admin-form"><label><span>管理员密码</span><input id="admin-password" type="password" autocomplete="current-password" minlength="10" required placeholder="至少 10 个字符"></label><div class="admin-warning"><b>管理员权限可修改交换机运行配置</b><span>每次变更仍需单独确认，并自动执行变更前备份。</span></div><div class="actions"><button type="button" class="secondary" data-close>取消</button><button class="primary" id="admin-submit">解锁</button></div></form>
+  </div></div>
+
+  <div class="modal" id="change-modal" aria-hidden="true"><div class="dialog command-dialog">
+    <div class="dialog-head"><div><h2 id="change-title">受控配置变更</h2><p>仅修改运行配置，不会执行 save</p></div><button class="close" data-close>×</button></div>
+    <form id="change-form"><input type="hidden" id="change-id"><div class="change-guard"><b>执行顺序</b><span>验证管理员 → 校验脚本 → 备份当前配置 → 执行变更 → 写入审计日志</span></div><label><span>配置脚本</span><textarea id="change-script" rows="7" required placeholder="system-view&#10;interface GigabitEthernet1/0/1&#10;description Uplink"></textarea></label><label><span>输入完整设备名称确认：<b id="confirm-device-label"></b></span><input id="confirm-device" autocomplete="off" required></label><div class="danger-notice"><b>重要提示</b><span>命令超时不代表配置未生效。完成后必须立即使用只读查询核查结果。系统永久禁止重启、清空、格式化、文件操作及修改管理认证信息。</span></div><div class="actions"><button type="button" class="secondary" data-close>取消</button><button class="danger-button" id="change-submit">备份并执行变更</button></div></form><pre id="change-output" class="terminal hidden"></pre>
+  </div></div>
+
+  <div id="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
