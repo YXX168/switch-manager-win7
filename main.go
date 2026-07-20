@@ -252,6 +252,8 @@ func (a *App) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/admin/setup", a.adminSetupHandler)
 	mux.HandleFunc("/api/admin/login", a.adminLoginHandler)
 	mux.HandleFunc("/api/admin/logout", a.adminLogoutHandler)
+	mux.HandleFunc("/api/import/template", a.importTemplateHandler)
+	mux.HandleFunc("/api/import/devices", a.importDevicesHandler)
 	mux.HandleFunc("/api/backups", a.backupsHandler)
 	mux.HandleFunc("/api/backups/", a.backupDownloadHandler)
 	root, _ := fs.Sub(webFiles, "web")
@@ -672,7 +674,7 @@ func (a *App) runSSH(d Device, command string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("无法解密 SSH 密码：%v", err)
 	}
-	config := &ssh.ClientConfig{User: d.Username, Auth: []ssh.AuthMethod{ssh.Password(password)}, HostKeyCallback: a.hostKeyCallback(), Timeout: 7 * time.Second}
+	config := a.sshClientConfig(d, password, false)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	var client *ssh.Client
@@ -687,7 +689,10 @@ func (a *App) runSSH(d Device, command string) (string, error) {
 		return "", fmt.Errorf("SSH 连接超时")
 	case err := <-done:
 		if err != nil {
-			return "", friendlySSHError(err)
+			client, err = a.dialLegacySSH(d, password, err)
+			if err != nil {
+				return "", err
+			}
 		}
 	}
 	defer client.Close()

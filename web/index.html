@@ -37,7 +37,7 @@
     </section>
 
     <section class="page" id="page-devices">
-      <div class="toolbar"><div class="search">⌕ <input id="search" placeholder="搜索名称、IP、位置或型号"></div><select id="vendor-filter"><option value="">全部厂商</option><option>Huawei</option><option>H3C</option></select><button class="secondary" id="scan-all">巡检全部</button><button class="primary" id="batch-command">批量查询</button></div>
+      <div class="toolbar"><div class="search">⌕ <input id="search" placeholder="搜索名称、IP、位置或型号"></div><select id="vendor-filter"><option value="">全部厂商</option><option>Huawei</option><option>H3C</option></select><button class="secondary" id="import-open">批量导入</button><button class="secondary" id="scan-all">巡检全部</button><button class="primary" id="batch-command">批量查询</button></div>
       <div class="panel"><div id="device-table"></div></div>
     </section>
 
@@ -95,6 +95,11 @@
   <div class="modal" id="change-modal" aria-hidden="true"><div class="dialog command-dialog">
     <div class="dialog-head"><div><h2 id="change-title">受控配置变更</h2><p>仅修改运行配置，不会执行 save</p></div><button class="close" data-close>×</button></div>
     <form id="change-form"><input type="hidden" id="change-id"><div class="change-guard"><b>执行顺序</b><span>验证管理员 → 校验脚本 → 备份当前配置 → 执行变更 → 写入审计日志</span></div><label><span>配置脚本</span><textarea id="change-script" rows="7" required placeholder="system-view&#10;interface GigabitEthernet1/0/1&#10;description Uplink"></textarea></label><label><span>输入完整设备名称确认：<b id="confirm-device-label"></b></span><input id="confirm-device" autocomplete="off" required></label><div class="danger-notice"><b>重要提示</b><span>命令超时不代表配置未生效。完成后必须立即使用只读查询核查结果。系统永久禁止重启、清空、格式化、文件操作及修改管理认证信息。</span></div><div class="actions"><button type="button" class="secondary" data-close>取消</button><button class="danger-button" id="change-submit">备份并执行变更</button></div></form><pre id="change-output" class="terminal hidden"></pre>
+  </div></div>
+
+  <div class="modal" id="import-modal" aria-hidden="true"><div class="dialog import-dialog">
+    <div class="dialog-head"><div><h2>CSV 批量导入设备</h2><p>整批校验、一次写入，错误时不会导入任何设备</p></div><button class="close" data-close>×</button></div>
+    <form id="import-form"><div class="import-steps"><span><b>1</b><a href="/api/import/template">下载 CSV 模板</a></span><span><b>2</b>填写并保存</span><span><b>3</b>选择文件导入</span></div><label class="file-drop"><input id="import-file" type="file" accept=".csv,text/csv" required><strong>选择 CSV 文件</strong><span>支持 UTF-8 或 GBK，最多 1000 台、2 MB</span></label><div class="import-warning">CSV 中的密码和 SNMP 团体字是明文。导入完成后请安全删除文件，不要上传到网盘或 GitHub。</div><div id="import-preview" class="import-preview"><div class="empty-mini">尚未选择文件</div></div><div class="actions"><button type="button" class="secondary" data-close>取消</button><button class="primary" id="import-submit" disabled>确认导入</button></div></form>
   </div></div>
 
   <div id="toast"></div>

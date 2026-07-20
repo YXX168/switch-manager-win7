@@ -7,6 +7,7 @@
 ## 功能
 
 - 华为、华三设备资产管理
+- CSV 模板下载、预览和最多 1000 台设备的原子批量导入
 - Windows DPAPI 加密保存 SSH 密码和 SNMP 团体字
 - Ping、SSH 端口、SNMP v2c 状态巡检
 - 严格只读 SSH 查询，仅允许 `display ...`
@@ -18,6 +19,7 @@
 - 受控单设备配置变更
 - 操作审计日志
 - 仅监听 `127.0.0.1`
+- 老旧设备 SSH SHA-1/CBC 算法按需兼容回退
 
 ## 安全模型
 
@@ -27,6 +29,10 @@
 - SNMP 只调用 GET，从不调用 SET。
 - 配置备份只执行 `display current-configuration`，不会执行 `save`。
 - 状态巡检只执行本机 Ping、TCP 连接探测和 SNMP GET。
+
+### 老旧 SSH 兼容
+
+客户端始终先使用现代 SSH 算法。只有设备明确返回“无共同算法”时，才会重试老旧设备常见的 `diffie-hellman-group1-sha1`、`group-exchange-sha1`、AES-CBC 和 3DES-CBC，并在审计日志中记录安全降级。建议优先升级交换机 SSH 算法配置。
 
 ### 管理员变更
 
@@ -82,6 +88,8 @@ go build -trimpath -ldflags "-s -w" -o switch-manager-32bit.exe .
 - `data/audit.jsonl`：操作审计。
 
 请勿将 `data` 目录、真实配置备份或设备日志提交到 GitHub。
+
+批量导入 CSV 包含明文 SSH 密码和 SNMP 团体字。导入成功后请安全删除 CSV，不要上传到 GitHub、网盘或聊天工具。
 
 ## 兼容性
 

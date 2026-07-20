@@ -112,7 +112,7 @@ func (a *App) dialSSHClient(d Device) (*ssh.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("无法解密 SSH 密码：%v", err)
 	}
-	config := &ssh.ClientConfig{User: d.Username, Auth: []ssh.AuthMethod{ssh.Password(password)}, HostKeyCallback: a.hostKeyCallback(), Timeout: 7 * time.Second}
+	config := a.sshClientConfig(d, password, false)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	done := make(chan struct {
@@ -131,10 +131,40 @@ func (a *App) dialSSHClient(d Device) (*ssh.Client, error) {
 		return nil, fmt.Errorf("SSH 连接超时")
 	case result := <-done:
 		if result.err != nil {
-			return nil, friendlySSHError(result.err)
+			return a.dialLegacySSH(d, password, result.err)
 		}
 		return result.client, nil
 	}
+}
+
+func (a *App) sshClientConfig(d Device, password string, legacy bool) *ssh.ClientConfig {
+	config := &ssh.ClientConfig{User: d.Username, Auth: []ssh.AuthMethod{ssh.Password(password)}, HostKeyCallback: a.hostKeyCallback(), Timeout: 7 * time.Second}
+	if legacy {
+		config.Config.SetDefaults()
+		config.KeyExchanges = append(config.KeyExchanges, "diffie-hellman-group1-sha1", "diffie-hellman-group-exchange-sha1")
+		config.Ciphers = append(config.Ciphers, "aes128-cbc", "3des-cbc")
+	}
+	return config
+}
+
+func (a *App) dialLegacySSH(d Device, password string, modernErr error) (*ssh.Client, error) {
+	if !isSSHAlgorithmError(modernErr) {
+		return nil, friendlySSHError(modernErr)
+	}
+	client, err := ssh.Dial("tcp", net.JoinHostPort(d.Host, strconv.Itoa(d.SSHPort)), a.sshClientConfig(d, password, true))
+	if err != nil {
+		return nil, friendlySSHError(err)
+	}
+	a.logAction("SSH 兼容模式", d, true, "设备仅支持旧版 SHA-1/CBC 算法，已自动降级连接")
+	return client, nil
+}
+
+func isSSHAlgorithmError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "no common algorithm") || strings.Contains(s, "no common cipher")
 }
 
 func (a *App) runSSHShell(d Device, script string) (string, error) {
