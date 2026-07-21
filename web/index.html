@@ -37,13 +37,13 @@
     </section>
 
     <section class="page" id="page-devices">
-      <div class="toolbar"><div class="search">⌕ <input id="search" placeholder="搜索名称、IP、位置或型号"></div><select id="vendor-filter"><option value="">全部厂商</option><option>Huawei</option><option>H3C</option></select><button class="secondary" id="import-open">批量导入</button><button class="secondary" id="scan-all">巡检全部</button><button class="primary" id="batch-command">批量查询</button></div>
+      <div class="toolbar"><div class="search">⌕ <input id="search" placeholder="搜索名称、IP、位置或型号"></div><select id="vendor-filter"><option value="">全部厂商</option><option>Huawei</option><option>H3C</option></select><button class="secondary" id="import-open">导入</button><button class="secondary" id="export-devices">导出</button><button class="secondary" id="backup-all">备份全部</button><button class="secondary" id="scan-all">巡检全部</button><button class="primary" id="batch-command">批量查询</button></div>
       <div class="panel"><div id="device-table"></div></div>
     </section>
 
     <section class="page" id="page-backups">
       <div class="panel">
-        <div class="panel-head"><div><h2>配置备份</h2><p>通过 SSH 获取 display current-configuration</p></div><div><button class="secondary" id="compare-backups">对比所选</button> <button class="secondary" id="refresh-backups">刷新</button> <button class="primary" id="backup-all">备份全部</button></div></div>
+        <div class="panel-head"><div><h2>配置备份</h2><p>通过 SSH 获取 display current-configuration</p></div><div><button class="secondary" id="compare-backups">对比所选</button> <button class="secondary" id="refresh-backups">刷新</button></div></div>
         <div id="backup-table"></div>
       </div>
     </section>

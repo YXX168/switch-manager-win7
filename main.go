@@ -59,9 +59,11 @@ type DeviceView struct {
 	Location     string    `json:"location,omitempty"`
 	SSHPort      int       `json:"sshPort"`
 	Username     string    `json:"username"`
+	Password     string    `json:"password"`
 	HasPassword  bool      `json:"hasPassword"`
 	SNMPEnabled  bool      `json:"snmpEnabled"`
 	SNMPPort     uint16    `json:"snmpPort"`
+	Community    string    `json:"community"`
 	HasCommunity bool      `json:"hasCommunity"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
@@ -254,6 +256,7 @@ func (a *App) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/admin/logout", a.adminLogoutHandler)
 	mux.HandleFunc("/api/import/template", a.importTemplateHandler)
 	mux.HandleFunc("/api/import/devices", a.importDevicesHandler)
+	mux.HandleFunc("/api/export/devices", a.exportDevicesHandler)
 	mux.HandleFunc("/api/backups", a.backupsHandler)
 	mux.HandleFunc("/api/backups/", a.backupDownloadHandler)
 	root, _ := fs.Sub(webFiles, "web")
@@ -421,7 +424,14 @@ func deviceFromInput(in DeviceInput, old *Device) (Device, error) {
 }
 
 func viewOf(d Device) DeviceView {
-	return DeviceView{d.ID, d.Name, d.Host, d.Vendor, d.Model, d.Location, d.SSHPort, d.Username, d.PasswordCipher != "", d.SNMPEnabled, d.SNMPPort, d.CommunityCipher != "", d.CreatedAt, d.UpdatedAt}
+	password, community := "", ""
+	if d.PasswordCipher != "" {
+		password, _ = unprotectString(d.PasswordCipher)
+	}
+	if d.CommunityCipher != "" {
+		community, _ = unprotectString(d.CommunityCipher)
+	}
+	return DeviceView{ID: d.ID, Name: d.Name, Host: d.Host, Vendor: d.Vendor, Model: d.Model, Location: d.Location, SSHPort: d.SSHPort, Username: d.Username, Password: password, HasPassword: d.PasswordCipher != "", SNMPEnabled: d.SNMPEnabled, SNMPPort: d.SNMPPort, Community: community, HasCommunity: d.CommunityCipher != "", CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt}
 }
 
 func (a *App) dashboardHandler(w http.ResponseWriter, r *http.Request) {
@@ -901,17 +911,28 @@ var hostnameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$`)
 
 func validHost(s string) bool { return net.ParseIP(s) != nil || hostnameRE.MatchString(s) }
 func pingHost(host string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 	defer cancel()
-	args := []string{"-n", "1", "-w", "1500", host}
+	args := []string{"-n", "2", "-w", "1500"}
+	if ip := net.ParseIP(host); ip != nil && ip.To4() != nil {
+		args = append(args, "-4")
+	}
+	args = append(args, host)
 	cmd := exec.CommandContext(ctx, "ping", args...)
-	if err := cmd.Run(); err != nil {
+	output, err := cmd.CombinedOutput()
+	if pingOutputIndicatesReply(output) {
+		return nil
+	}
+	if err != nil {
 		if ctx.Err() != nil {
 			return fmt.Errorf("检测超时")
 		}
 		return fmt.Errorf("不可达")
 	}
 	return nil
+}
+func pingOutputIndicatesReply(output []byte) bool {
+	return strings.Contains(strings.ToLower(string(output)), "ttl=")
 }
 func randomID() string { b := make([]byte, 8); _, _ = rand.Read(b); return hex.EncodeToString(b) }
 func safeName(s string) string {

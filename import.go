@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -18,8 +19,36 @@ func (a *App) importTemplateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="switch-import-template.csv"`)
 	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
 	writer := csv.NewWriter(w)
-	_ = writer.Write([]string{"name", "host", "vendor", "model", "location", "sshPort", "username", "password", "snmpEnabled", "snmpPort", "community"})
+	_ = writer.Write([]string{"设备名称", "管理地址", "厂商", "型号", "位置", "SSH端口", "SSH用户名", "SSH密码", "SNMP启用", "SNMP端口", "SNMP团体字"})
 	writer.Flush()
+}
+
+func (a *App) exportDevicesHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.settings.configured() && !a.requireAdmin(w, r) {
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="switch-device-export.csv"`)
+	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
+	writer := csv.NewWriter(w)
+	_ = writer.Write([]string{"设备名称", "管理地址", "厂商", "型号", "位置", "SSH端口", "SSH用户名", "SSH密码", "SNMP启用", "SNMP端口", "SNMP团体字"})
+	items := a.store.list()
+	for _, d := range items {
+		password, community := "", ""
+		if d.PasswordCipher != "" {
+			password, _ = unprotectString(d.PasswordCipher)
+		}
+		if d.CommunityCipher != "" {
+			community, _ = unprotectString(d.CommunityCipher)
+		}
+		_ = writer.Write([]string{d.Name, d.Host, d.Vendor, d.Model, d.Location, strconv.Itoa(d.SSHPort), d.Username, password, strconv.FormatBool(d.SNMPEnabled), strconv.Itoa(int(d.SNMPPort)), community})
+	}
+	writer.Flush()
+	a.logAction("导出设备清单", Device{}, true, fmt.Sprintf("导出 %d 台设备，包含明文密码和团体字", len(items)))
 }
 
 func (a *App) importDevicesHandler(w http.ResponseWriter, r *http.Request) {

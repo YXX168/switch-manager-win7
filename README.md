@@ -8,6 +8,8 @@
 
 - 华为、华三设备资产管理
 - CSV 模板下载、预览和最多 1000 台设备的原子批量导入
+- 中文 CSV 模板及包含明文 SSH/SNMP 凭据的设备清单导出
+- 设备管理页直接显示 SSH 密码和 SNMP 团体字
 - Windows DPAPI 加密保存 SSH 密码和 SNMP 团体字
 - Ping、SSH 端口、SNMP v2c 状态巡检
 - 严格只读 SSH 查询，仅允许 `display ...`
@@ -92,7 +94,7 @@ go build -trimpath -ldflags "-s -w" -o switch-manager-32bit.exe .
 
 请勿将 `data` 目录、真实配置备份或设备日志提交到 GitHub。
 
-批量导入 CSV 包含明文 SSH 密码和 SNMP 团体字。导入成功后请安全删除 CSV，不要上传到 GitHub、网盘或聊天工具。
+磁盘中的 `devices.json` 使用 DPAPI 加密凭据，但设备管理页面和导出 CSV 会按产品设计显示明文 SSH 密码与 SNMP 团体字。批量导入和导出 CSV 均包含明文凭据。
 
 ## 兼容性
 
