@@ -167,6 +167,65 @@ func isSSHAlgorithmError(err error) bool {
 	return strings.Contains(s, "no common algorithm") || strings.Contains(s, "no common cipher")
 }
 
+func (a *App) runSSHQueryShell(client *ssh.Client, d Device, command string) (string, error) {
+	if err := validateReadOnlyCommand(command); err != nil {
+		return "", err
+	}
+	session, err := client.NewSession()
+	if err != nil {
+		return "", err
+	}
+	defer session.Close()
+	if err = session.RequestPty("vt100", 120, 40, ssh.TerminalModes{ssh.ECHO: 0}); err != nil {
+		return "", fmt.Errorf("设备不支持交互式 SSH 查询：%v", err)
+	}
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		return "", err
+	}
+	var output strings.Builder
+	session.Stdout = &output
+	session.Stderr = &output
+	if err = session.Shell(); err != nil {
+		return "", fmt.Errorf("无法启动设备命令行：%v", err)
+	}
+	go func() {
+		paging := "screen-length 0 temporary"
+		if d.Vendor == "H3C" {
+			paging = "screen-length disable"
+		}
+		_, _ = fmt.Fprintln(stdin, paging)
+		time.Sleep(150 * time.Millisecond)
+		for _, line := range strings.Split(strings.ReplaceAll(command, "\r", ""), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			_, _ = fmt.Fprintln(stdin, line)
+			time.Sleep(180 * time.Millisecond)
+		}
+		_, _ = fmt.Fprintln(stdin, "quit")
+		_ = stdin.Close()
+	}()
+	done := make(chan error, 1)
+	go func() { done <- session.Wait() }()
+	timer := time.NewTimer(90 * time.Second)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return cleanTerminalOutput(output.String()), fmt.Errorf("交互式查询超时")
+	case waitErr := <-done:
+		clean := cleanTerminalOutput(output.String())
+		if waitErr != nil && clean == "" {
+			return "", waitErr
+		}
+		if clean == "" {
+			return "", fmt.Errorf("设备没有返回查询内容")
+		}
+		return clean, nil
+	}
+}
+
 func (a *App) runSSHShell(d Device, script string) (string, error) {
 	client, err := a.dialSSHClient(d)
 	if err != nil {

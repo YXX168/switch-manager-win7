@@ -711,7 +711,22 @@ func (a *App) runSSH(d Device, command string) (string, error) {
 		return b.String(), fmt.Errorf("命令执行超时")
 	case err := <-done:
 		if err != nil && b.Len() == 0 {
-			return "", fmt.Errorf("命令执行失败：%v", err)
+			_ = session.Close()
+			out, fallbackErr := a.runSSHQueryShell(client, d, command)
+			if fallbackErr != nil {
+				retryClient, dialErr := a.dialSSHClient(d)
+				if dialErr == nil {
+					defer retryClient.Close()
+					out, fallbackErr = a.runSSHQueryShell(retryClient, d, command)
+				} else {
+					fallbackErr = fmt.Errorf("重新连接失败：%v", dialErr)
+				}
+				if fallbackErr != nil {
+					return "", fmt.Errorf("命令执行失败：%v；交互兼容模式也失败：%v", err, fallbackErr)
+				}
+			}
+			a.logAction("SSH 交互兼容模式", d, true, "设备不支持 exec 通道，已使用交互式只读查询")
+			return out, nil
 		}
 	}
 	return strings.TrimSpace(b.String()), nil
