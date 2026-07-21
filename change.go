@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -183,47 +185,115 @@ func (a *App) runSSHQueryShell(client *ssh.Client, d Device, command string) (st
 	if err != nil {
 		return "", err
 	}
-	var output strings.Builder
-	session.Stdout = &output
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+	var output terminalCapture
 	session.Stderr = &output
 	if err = session.Shell(); err != nil {
 		return "", fmt.Errorf("无法启动设备命令行：%v", err)
 	}
-	go func() {
-		paging := "screen-length 0 temporary"
-		if d.Vendor == "H3C" {
-			paging = "screen-length disable"
+	go func() { _, _ = io.Copy(&output, stdout) }()
+	if err := waitForTerminalPrompt(&output, 0, 8*time.Second); err != nil {
+		_, _ = fmt.Fprintln(stdin)
+		if err = waitForTerminalPrompt(&output, 0, 5*time.Second); err != nil {
+			return cleanTerminalOutput(output.String()), fmt.Errorf("登录后未检测到设备提示符：%v", err)
 		}
-		_, _ = fmt.Fprintln(stdin, paging)
-		time.Sleep(150 * time.Millisecond)
-		for _, line := range strings.Split(strings.ReplaceAll(command, "\r", ""), "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			_, _ = fmt.Fprintln(stdin, line)
-			time.Sleep(180 * time.Millisecond)
+	}
+	paging := "screen-length 0 temporary"
+	if d.Vendor == "H3C" {
+		paging = "screen-length disable"
+	}
+	pagingStart := output.Len()
+	_, _ = fmt.Fprintln(stdin, paging)
+	if err = waitForTerminalPrompt(&output, pagingStart, 10*time.Second); err != nil {
+		return cleanTerminalOutput(output.String()), fmt.Errorf("关闭分页时未返回提示符：%v", err)
+	}
+	queryStart := output.Len()
+	for _, line := range strings.Split(strings.ReplaceAll(command, "\r", ""), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
 		}
-		_, _ = fmt.Fprintln(stdin, "quit")
-		_ = stdin.Close()
-	}()
+		start := output.Len()
+		_, _ = fmt.Fprintln(stdin, line)
+		if err = waitForTerminalPrompt(&output, start, 90*time.Second); err != nil {
+			return cleanTerminalOutput(output.Since(queryStart)), fmt.Errorf("查询 %q 未完成：%v", line, err)
+		}
+	}
+	result := cleanTerminalOutput(output.Since(queryStart))
+	_, _ = fmt.Fprintln(stdin, "quit")
+	_ = stdin.Close()
 	done := make(chan error, 1)
 	go func() { done <- session.Wait() }()
-	timer := time.NewTimer(90 * time.Second)
-	defer timer.Stop()
 	select {
-	case <-timer.C:
-		return cleanTerminalOutput(output.String()), fmt.Errorf("交互式查询超时")
-	case waitErr := <-done:
-		clean := cleanTerminalOutput(output.String())
-		if waitErr != nil && clean == "" {
-			return "", waitErr
-		}
-		if clean == "" {
-			return "", fmt.Errorf("设备没有返回查询内容")
-		}
-		return clean, nil
+	case <-done:
+	case <-time.After(2 * time.Second):
+		_ = session.Close()
 	}
+	if result == "" {
+		return "", fmt.Errorf("设备没有返回查询内容")
+	}
+	return result, nil
+}
+
+type terminalCapture struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (c *terminalCapture) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.b.Write(p)
+}
+func (c *terminalCapture) String() string { c.mu.Lock(); defer c.mu.Unlock(); return c.b.String() }
+func (c *terminalCapture) Len() int       { c.mu.Lock(); defer c.mu.Unlock(); return c.b.Len() }
+func (c *terminalCapture) Since(start int) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s := c.b.String()
+	if start < 0 || start > len(s) {
+		start = 0
+	}
+	return s[start:]
+}
+
+func waitForTerminalPrompt(c *terminalCapture, start int, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	lastLen := -1
+	stableSince := time.Time{}
+	for time.Now().Before(deadline) {
+		text := c.Since(start)
+		length := c.Len()
+		if hasTrailingTerminalPrompt(text) {
+			if length != lastLen {
+				lastLen = length
+				stableSince = time.Now()
+			} else if !stableSince.IsZero() && time.Since(stableSince) >= 180*time.Millisecond {
+				return nil
+			}
+		} else {
+			lastLen = length
+			stableSince = time.Time{}
+		}
+		time.Sleep(40 * time.Millisecond)
+	}
+	return fmt.Errorf("等待设备提示符超时")
+}
+
+func hasTrailingTerminalPrompt(text string) bool {
+	clean := cleanTerminalOutput(text)
+	if clean == "" {
+		return false
+	}
+	lines := strings.Split(clean, "\n")
+	last := strings.TrimSpace(lines[len(lines)-1])
+	if len(last) < 3 || len(last) > 200 {
+		return false
+	}
+	return (strings.HasPrefix(last, "<") && strings.HasSuffix(last, ">")) || (strings.HasPrefix(last, "[") && strings.HasSuffix(last, "]"))
 }
 
 func (a *App) runSSHShell(d Device, script string) (string, error) {

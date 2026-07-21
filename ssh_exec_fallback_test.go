@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
@@ -92,6 +93,7 @@ func handleLegacySession(channel ssh.Channel, requests <-chan *ssh.Request) {
 			_ = request.Reply(true, nil)
 		case "shell":
 			_ = request.Reply(true, nil)
+			_, _ = channel.Write([]byte("\r\n<LEGACY-SW>"))
 			go serveLegacyShell(channel)
 			return
 		default:
@@ -102,24 +104,32 @@ func handleLegacySession(channel ssh.Channel, requests <-chan *ssh.Request) {
 
 func serveLegacyShell(channel ssh.Channel) {
 	defer channel.Close()
-	buf := make([]byte, 512)
-	var input strings.Builder
-	wrote := false
-	for {
-		n, err := channel.Read(buf)
-		if n > 0 {
-			input.Write(buf[:n])
-			text := input.String()
-			if !wrote && strings.Contains(text, "display version") {
-				_, _ = channel.Write([]byte("\r\nLEGACY SWITCH VERSION 1.0\r\n"))
-				wrote = true
-			}
-			if strings.Contains(text, "quit") {
-				return
-			}
-		}
-		if err != nil {
+	scanner := bufio.NewScanner(channel)
+	for scanner.Scan() {
+		command := strings.TrimSpace(scanner.Text())
+		switch {
+		case command == "":
+			_, _ = channel.Write([]byte("\r\n<LEGACY-SW>"))
+		case strings.HasPrefix(command, "screen-length"):
+			_, _ = channel.Write([]byte("\r\nInfo: paging disabled\r\n<LEGACY-SW>"))
+		case command == "display version":
+			_, _ = channel.Write([]byte("\r\nLEGACY SWITCH VERSION 1.0\r\n<LEGACY-SW>"))
+		case command == "quit":
 			return
+		default:
+			_, _ = channel.Write([]byte("\r\nError: unknown command\r\n<LEGACY-SW>"))
 		}
+	}
+}
+
+func TestTrailingTerminalPromptDetection(t *testing.T) {
+	if !hasTrailingTerminalPrompt("output\r\n<SW-01>") {
+		t.Fatal("Huawei-style prompt not detected")
+	}
+	if !hasTrailingTerminalPrompt("output\n[SW-01]") {
+		t.Fatal("system-view prompt not detected")
+	}
+	if hasTrailingTerminalPrompt("display vlan\nVLAN 10") {
+		t.Fatal("ordinary output mistaken for prompt")
 	}
 }
