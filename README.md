@@ -62,7 +62,9 @@
 
 ## 构建
 
-Windows 7 支持需要使用 Go 1.20.x；Go 1.21 起不再支持 Windows 7。
+Windows 7 支持需要使用 Go 1.20.x；Go 1.21 起不再支持 Windows 7。CI 固定使用 Go 1.20.14，并分别测试、静态检查和构建 `amd64` / `386`。也可在 Actions 中手动运行 `build` 工作流，下载对应架构的构建产物。
+
+CI 在当前 Windows runner 上执行，不能替代 Windows 7 SP1 实机验证。升级 Go 工具链或依赖前，需要单独核对 Windows 7 兼容性。
 
 ```powershell
 go test ./...
@@ -88,7 +90,7 @@ go build -trimpath -ldflags "-s -w" -o switch-manager-32bit.exe .
 
 - `data/devices.json`：设备信息，凭据字段由当前 Windows 用户的 DPAPI 加密；
 - `data/settings.json`：管理员 bcrypt 密码哈希；
-- `data/known_hosts`：SSH 主机指纹；
+- `data/known_hosts`：SSH 主机指纹；记录损坏或无法读取时会拒绝 SSH 连接，需先修复该文件；
 - `data/backups/`：配置备份，当前为本地明文文件；
 - `data/audit.jsonl`：操作审计。
 

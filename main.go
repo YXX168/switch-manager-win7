@@ -747,6 +747,9 @@ func (a *App) hostKeyCallback() ssh.HostKeyCallback {
 		a.sshHostMu.Lock()
 		defer a.sshHostMu.Unlock()
 		cb, err := knownhosts.New(a.knownHosts)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("无法读取 SSH 主机密钥记录，请修复 data\\known_hosts 后重试：%w", err)
+		}
 		if err == nil {
 			if e := cb(hostname, remote, key); e == nil {
 				return nil
